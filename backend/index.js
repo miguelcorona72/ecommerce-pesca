@@ -1,8 +1,8 @@
 const express = require("express");
 const cors = require("cors");
-const mongoose = require("mongoose")
-const dotenv = require("dotenv").config()
-
+const mongoose = require("mongoose");
+const dotenv = require("dotenv").config();
+const Stripe = require('stripe')
 
 const app = express();
 app.use(cors());
@@ -91,6 +91,89 @@ app.post("/login", async (req, res) => {
     }
   });
 //});
+
+
+//product section
+
+const schemaProduct = mongoose.Schema({
+  name: String,
+  category:String,
+  image: String,
+  price: String,
+  description: String,
+});
+const productModel = mongoose.model("product",schemaProduct)
+
+
+
+//save product in data 
+//api
+app.post("/uploadProduct",async(req,res)=>{
+//app.post("/uploadProduct",(req,res)=>{
+ //  console.log(req.body)
+  const data = await productModel(req.body)
+  const datasave = await data.save()
+  res.send({message : "Carga exitosa"})
+})
+
+//
+app.get("/product",async(req,res)=>{
+const data = await productModel.find({})
+res.send(JSON.stringify(data))
+//res.send("data")
+})
+
+/*****payment getWay */
+console.log(process.env.STRIPE_SECRET_KEY)
+
+
+const stripe  = new Stripe(process.env.STRIPE_SECRET_KEY)
+
+app.post("/create-checkout-session",async(req,res)=>{
+
+     try{
+      const params = {
+          submit_type : 'pay',
+          mode : "payment",
+          payment_method_types : ['card'],
+          billing_address_collection : "auto",
+          shipping_options : [{shipping_rate : "shr_1NHHBqJf6fiPOJ0WpMJztru7"}],
+
+          line_items : req.body.map((item)=>{
+            return{
+              price_data : {
+                currency : "mxn",
+                product_data : {
+                  name : item.name,
+                  // images : [item.image]
+                },
+                unit_amount : item.price * 100,
+              },
+              adjustable_quantity : {
+                enabled : true,
+                minimum : 1,
+              },
+              quantity : item.qty
+            }
+          }),
+
+          success_url : `${process.env.FRONTEND_URL}/success`,
+          cancel_url : `${process.env.FRONTEND_URL}/cancel`,
+
+      }
+
+      
+      const session = await stripe.checkout.sessions.create(params)
+      // console.log(session)
+      res.status(200).json(session.id)
+     }
+     catch (err){
+        res.status(err.statusCode || 500).json(err.message)
+     }
+
+})
+
+
 
 //server is ruuning
 app.listen(PORT, () => console.log("El servidor esta corriendo en el puerto : " + PORT));
